@@ -15,6 +15,6 @@ mongoose.connect(database).then((con) => {
 
 // -> Start the server
 
-app.listen(process.env.PORT || 8000, () => {
+app.listen(process.env.PORT || 5000, () => {
   console.log(`Application is running on port ${process.env.PORT || 5000}  `);
 });

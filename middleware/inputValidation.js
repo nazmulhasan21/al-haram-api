@@ -55,3 +55,15 @@ exports.updateMeValidate = [
     .matches(/^[a-zA-Z0-9., ]+$/)
     .withMessage('Please enter valid institution'),
 ];
+
+exports.isEmailInput = [
+  body('email')
+    .trim()
+    .isEmail()
+    .withMessage((value) => {
+      return `'${value}' not a valid email.`;
+    })
+    .notEmpty()
+    .withMessage('Please enter any valid email.')
+    .normalizeEmail(),
+];

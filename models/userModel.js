@@ -6,7 +6,6 @@ const userSchema = new mongoose.Schema(
   {
     email: {
       type: String,
-      required: [true, 'Please fill your email'],
       unique: true,
       lowercase: true,
       validate: [validator.isEmail, 'Please provide a valid email'],
@@ -14,20 +13,13 @@ const userSchema = new mongoose.Schema(
     password: {
       type: String,
       required: true,
-      select: false,
     },
-    name: {
-      type: String,
-      required: [true, 'Please fill your name'],
+    twoFactorAuthEnabled: {
+      type: Boolean,
+      default: false,
     },
-    institution: {
-      type: String,
-      default: 'NOT_SET_YET',
-    },
-    address: {
-      type: String,
-      default: 'NOT_SET_YET',
-    },
+    twoFactorTempSecret: String,
+    secret: String,
   },
   { timestamps: true }
 );

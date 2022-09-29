@@ -5,6 +5,8 @@ const { updateMeValidate } = require('../middleware/inputValidation');
 const userController = require('../controllers/userController');
 const { protect } = require('../controllers/authController');
 
+// If any User forget her password then use after 3 router
+
 // Protect all routes after this middleware
 router.use(protect);
 

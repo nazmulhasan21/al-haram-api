@@ -1,7 +1,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const cors = require('cors');
-const helmet = require('helmet');
+
+// const helmet = require('helmet');
 
 // Destructuring environment variables
 
@@ -11,7 +11,7 @@ const AppError = require('./utils/appError');
 
 const app = express();
 
-app.use(bodyParser.urlencoded({ extended: false }));
+app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -23,11 +23,11 @@ app.use((req, res, next) => {
   next();
 });
 
-// -> Allow Cross-Origin requests
-app.use(cors());
+// // -> Allow Cross-Origin requests
+// app.use(cors());
 
 // -> Set security HTTP headers
-app.use(helmet());
+// app.use(helmet());
 
 // -> Body parser, reading data from body into req.body
 app.use(
