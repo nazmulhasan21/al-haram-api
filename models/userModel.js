@@ -6,20 +6,47 @@ const userSchema = new mongoose.Schema(
   {
     email: {
       type: String,
-      unique: true,
       lowercase: true,
       validate: [validator.isEmail, 'Please provide a valid email'],
     },
+    phone: {
+      type: String,
+      unique: true,
+      required: true,
+    },
+    name: {
+      type: String,
+      default: '',
+    },
+    country: {
+      type: String,
+      default: '',
+    },
+    city: {
+      type: String,
+      default: '',
+    },
+    dateOfBirth: {
+      type: Date,
+    },
+    linkAccount: [
+      {
+        icon: String,
+        link: String,
+      },
+    ],
     password: {
       type: String,
       required: true,
     },
-    twoFactorAuthEnabled: {
+    phoneVerified: {
       type: Boolean,
       default: false,
     },
-    twoFactorTempSecret: String,
-    secret: String,
+    avatar: {
+      type: String,
+      default: '',
+    },
   },
   { timestamps: true }
 );

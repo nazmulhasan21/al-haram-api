@@ -10,10 +10,7 @@ const { protect } = require('../controllers/authController');
 // Protect all routes after this middleware
 router.use(protect);
 
-router
-  .route('/me')
-  .get(userController.me)
-  .patch(updateMeValidate, userController.updateMe);
+router.route('/me').get(userController.me);
 
 router.delete('/me/delete', userController.deleteMe);
 // Only admin have permission to access for the below APIs

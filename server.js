@@ -7,7 +7,7 @@ dotenv.config({
 const app = require('./app');
 
 // -> Connect the database
-const database = 'mongodb://0.0.0.0:27017/crud-operation';
+const database = 'mongodb://0.0.0.0:27017/al-haram-app';
 
 mongoose.connect(database).then((con) => {
   console.log('DB connection Successfully!');

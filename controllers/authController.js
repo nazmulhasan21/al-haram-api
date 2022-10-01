@@ -5,6 +5,7 @@ const User = require('../models/userModel');
 const AppError = require('../utils/appError');
 
 const sendMail = require('../utils/sendEmail');
+const { sendOtpVia, verifyOtp, phonNumberValidation } = require('../utils/fun');
 
 // create jwt token
 const createToken = (id) => {
@@ -13,38 +14,49 @@ const createToken = (id) => {
 
 exports.login = async (req, res, next) => {
   try {
-    const { email, password } = req.body;
-    // -> 1 <- check if email and password exist
-    if (!email || !password) {
-      return next(
-        new AppError(400, 'email', 'Please provide email or password', 'fail')
-      );
-    }
+    let { phone, countryCode, password } = req.body;
+    phone = await phonNumberValidation(countryCode, phone, res, next);
+    const error = {};
+    if (phone) {
+      const user = await User.findOne({
+        phone,
+      }).select('+password');
 
-    // -> 2 <- check if user exist and password is correct
-    const user = await User.findOne({ email }).select('+password');
-    if (!user || !(await user.correctPassword(password, user.password))) {
-      return next(new AppError(401, 'password', 'Email or Password is wrong'));
-    }
-    // check email verification
+      if (!user || !(await user.correctPassword(password, user.password))) {
+        return next(
+          new AppError(400, 'phone', 'Phone number or password is wrong')
+        );
+      }
+      // all okay then save user info in db
 
-    // -> 3 <- All correct , send jwt to client
-    if (user.twoFactorAuthEnabled) {
-      res.status(200).json({
-        status: 'success',
-        message: 'Login successfully',
-        twoFactorAuthEnabled: true,
-        userId: user._id,
-      });
-    } else {
-      const token = createToken(user.id);
-      // Remove the password from the output
-      user.password = undefined;
-      res.status(200).json({
-        status: 'success',
-        message: 'Login successfully',
-        token,
-      });
+      if (user && !user.phoneVerified) {
+        // send otp via sms
+        const sendOtp = await sendOtpVia('sms', user.phone, next);
+        // if send otp code
+        if (sendOtp) {
+          return res.status(200).json({
+            status: 'success',
+            message: 'Send otp code successfully',
+            phoneVerified: false,
+          });
+        } else {
+          error.message = 'Create account and Code send fail';
+          return res.status(400).json({ error });
+        }
+      } else if (user && user.phoneVerified) {
+        // -> 3 <- All correct , send jwt to client
+        // create token and send user
+        const token = createToken(user._id);
+        // Remove the password from the output
+        user.password = undefined;
+        return res.json({
+          status: 'success',
+          message: 'Login successfully',
+          phoneVerified: true,
+          token,
+          user,
+        });
+      }
     }
   } catch (err) {
     next(err);
@@ -57,106 +69,142 @@ exports.signup = async (req, res, next) => {
     if (!errors.isEmpty()) {
       return next(errors);
     }
-    const { name, email, password } = req.body;
+    let { phone, countryCode, password } = req.body;
+    phone = await phonNumberValidation(countryCode, phone, res, next);
+    const error = {};
+    if (phone) {
+      const phoneExist = await User.findOne({
+        phone,
+      });
+      const userExist = phoneExist;
+      if (userExist) {
+        return next(new AppError(400, 'phone', 'Phone number already exist'));
+      }
+      // all okay then save user info in db
 
-    const user = await User.create({
-      name,
-      email,
-      password,
-    });
-    // -> 3 <- All correct , send jwt to client
-    const token = createToken(user.id);
-    user.password = undefined;
-    res.status(200).json({
-      status: 'success',
-      message: 'Create account successfully',
-      token,
-      user,
-    });
+      // send otp in user phone vai sms
+      const sendOtp = await sendOtpVia('sms', phone, next);
+      if (sendOtp) {
+        await User.create({
+          phone,
+          password,
+        });
+        return res.status(200).json({
+          status: 'success',
+          message: 'Create account successfully',
+          phoneVerified: false,
+        });
+      } else {
+        error.message = 'Create account and Code send fail';
+        return res.status(400).json({ error });
+      }
+      // -> 3 <- All correct , send jwt to client
+    }
+    return res.status(400).json({ error });
   } catch (err) {
     err.statusCode = err.statusCode || 400;
     next(err);
   }
 };
 
-exports.sendForgetPasswordVerificationLink = async (req, res, next) => {
+exports.otpVerify = async (req, res, next) => {
   try {
-    const email = req.body.email.trim();
-    // 1. find user this email
-    const user = await User.findOne({ email });
+    let { otpCode, phone, countryCode } = req.body;
 
-    // 2. email doesn't exist
-    if (!user)
-      return res.status(404).json({
-        message: 'User not found  this email',
-      });
-
-    // 3. send forget password verification link
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
-      expiresIn: '15m',
-    });
-
-    const to = user.email;
-    const subject = 'Reset Password Verification Link';
-    const html = `<h2> Please click on given link to reset your password</h2>
-    <p><a href="http://${req.headers.host}/resetpassword?token=${token}">change password</a></p>`;
-
-    const sent = await sendMail(to, subject, html);
-    console.log(sent);
-
-    if (sent == true) {
-      res.status(200).json({
-        status: 'success',
-        message: 'Please check your email and reset your password',
-      });
-    } else {
-      res.status(sent.statusCode).json({
-        sent,
-      });
+    phone = await phonNumberValidation(countryCode, phone, res, next);
+    const user = await User.findOne({ phone });
+    const error = {};
+    if (phone && user) {
+      const verifySuccess = await verifyOtp(to, otpCode, next);
+      if (verifySuccess) {
+        await User.updateOne({ phone: to }, { phoneVerified: true });
+        return res.json({
+          message: 'Verified successfully',
+          phoneVerified: true,
+        });
+      } else {
+        error.otpCode = 'Incorrect code. Please try again';
+        return res.status(400).json({ error });
+      }
+    } else if (!user) {
+      error.user = 'Not have a account';
+      return res.status(400).json({ error });
     }
   } catch (error) {
-    console.log('email', error);
     next(error);
   }
 };
 
+exports.otpResent = async (req, res, next) => {
+  try {
+    let { phone, countryCode } = req.body;
+    phone = await phonNumberValidation(countryCode, phone, res, next);
+    const user = await User.findOne({ phone });
+    if (phone && user) {
+      const sendOtp = await sendOtpVia('sms', phone, next);
+      if (sendOtp) {
+        return res.status(200).json({
+          status: 'success',
+          message: 'Resent otp successfully',
+          phoneVerified: false,
+        });
+      }
+    }
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.sendForgetPasswordVerificationOtpCode = async (req, res, next) => {
+  try {
+    let { phone, countryCode } = req.body;
+    phone = await phonNumberValidation(countryCode, phone, res, next);
+    const user = await User.findOne({ phone });
+    const error = {};
+    if (phone && user) {
+      const sendOtp = await sendOtpVia('sms', phone, next);
+      if (sendOtp) {
+        return res.status(200).json({
+          status: 'success',
+          message: 'Resent otp code successfully',
+          phoneVerified: false,
+        });
+      }
+    } else if (!user) {
+      error.user = 'Not have a account';
+      return res.status(400).json({ error });
+    }
+  } catch (error) {
+    next(error);
+  }
+};
 // forget password
 exports.resatPassword = async (req, res, next) => {
   try {
-    const { token } = req.body;
-    const password = req.body.password.trim();
-
-    if (token) {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return next(errors);
     }
-
-    const user = await User.findOne({ email });
-    const otpCode = await OtpCode.findOne({ email, code });
-    if (!otpCode || !user) {
-      return next(new AppError(401, 'code', `Code is wrong`));
+    let { otpCode, phone, countryCode } = req.body;
+    phone = await phonNumberValidation(countryCode, phone, res, next);
+    const user = await User.findOne({ phone });
+    const newPassword = req.body.password;
+    const error = {};
+    if (phone && user) {
+      const verifySuccess = await verifyOtp(phone, otpCode, next);
+      if (verifySuccess) {
+        await User.updateOne({ phone }, { password: newPassword });
+        return res.json({
+          message: 'Reset your password successfully',
+        });
+      } else {
+        error.otpCode = 'Incorrect code. Please try again';
+        return res.status(400).json({ error });
+      }
+    } else if (!user) {
+      error.user = 'Not have a account';
+      return res.status(400).json({ error });
     }
-
-    // expired time
-    const expired = otpCode?.expiredAt - new Date().getTime();
-    if (expired < 0) {
-      const to = { email: email, name: user.name };
-      const subject = 'Reset Password Verification Code';
-      const templateName = 'sendEmailCode';
-
-      sendVerificationCode(to, subject, templateName);
-      return next(
-        new AppError(401),
-        'code',
-        'Code is expired. please check email sending new code'
-      );
-    }
-
-    user.password = newPassword;
-    await user.save();
-    await OtpCode.findByIdAndDelete(otpCode?._id);
-    res.status(200).json({
-      status: 'success',
-      message: 'Reset your password successfully',
-    });
   } catch (error) {
     next(error);
   }
