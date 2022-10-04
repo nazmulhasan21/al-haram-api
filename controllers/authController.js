@@ -1,5 +1,6 @@
 const { promisify } = require('util');
 const { validationResult } = require('express-validator');
+const { OAuth2Client } = require('google-auth-library');
 const jwt = require('jsonwebtoken');
 const User = require('../models/userModel');
 const AppError = require('../utils/appError');
@@ -104,6 +105,60 @@ exports.signup = async (req, res, next) => {
   } catch (err) {
     err.statusCode = err.statusCode || 400;
     next(err);
+  }
+};
+
+// google auth verify
+async function verify(client, token) {
+  const ticket = await client.verifyIdToken({
+    idToken: token,
+    audience: process.env.CLIENT_ID,
+  });
+  return ticket.getPayload();
+}
+
+exports.googleAuthSignIn = async (req, res, next) => {
+  try {
+    const { id_token } = req.body;
+    // google token verify
+    const client = new OAuth2Client(process.env.CLIENT_ID);
+    var x = await verify(client, id_token).catch();
+    if (x.email_verified) {
+      const user = await User.findOne({ email: x.email });
+      if (user) {
+        // create token;
+        const token = createToken(user._id);
+        user.password = undefined;
+        return res.json({
+          status: 'success',
+          message: 'Login successfully',
+          token,
+          user,
+        });
+      } else if (!user) {
+        const user = await User.create({
+          name: x.name,
+          email: x.email,
+          password: x.at_hash,
+        });
+        // create token
+        const token = createToken(user._id);
+        user.password = undefined;
+        return res.json({
+          status: 'success',
+          message: 'Login successfully',
+          token,
+          user,
+        });
+      }
+    } else {
+      res.send({
+        status: 'fail',
+        message: 'User unauthorized',
+      });
+    }
+  } catch (error) {
+    next(error);
   }
 };
 

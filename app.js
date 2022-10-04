@@ -1,6 +1,6 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-
+const cors = require('cors');
 // const helmet = require('helmet');
 
 // Destructuring environment variables
@@ -10,7 +10,7 @@ const globalErrHandler = require('./controllers/errorController');
 const AppError = require('./utils/appError');
 
 const app = express();
-
+app.use(cors());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use((req, res, next) => {

@@ -5,6 +5,7 @@ const { passwordValidate } = require('../middleware/inputValidation');
 const authController = require('../controllers/authController');
 
 router.post('/signup', passwordValidate, authController.signup);
+router.post('/google-auth-sign-in', authController.googleAuthSignIn);
 router.post('/otp/verify', authController.otpVerify);
 router.post('/otp/resent', authController.otpResent);
 
